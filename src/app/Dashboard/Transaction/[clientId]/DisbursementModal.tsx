@@ -217,7 +217,7 @@ export default function DisbursementModal({
             />
           </div>
 
-          <div> 
+          <div>
             <label className="text-sm font-medium">Months To Pay</label>
             <select
               className="w-full border rounded p-2"
