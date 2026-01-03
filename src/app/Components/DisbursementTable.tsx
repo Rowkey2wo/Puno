@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { DisbursementRow } from "@/app/Dashboard/Disbursement/page";
+// Import DisbursementRow from the correct source file
+import type { DisbursementRow } from "@/app/Dashboard/Disbursement/page"; 
 import * as XLSX from "xlsx";
 
 type DisbursementTableProps = {
@@ -49,8 +50,8 @@ export default function DisbursementTable({ data }: DisbursementTableProps) {
   };
 
   return (
-    <div className="w-full rounded-xl border bg-white p-6 shadow-sm">
-      <div className="flex justify-between items-center mb-4">
+    <div className="w-full p-6 rounded-xl border bg-white shadow-sm">
+      <div className="flex justify-between items-center p-6 mb-4">
         <h2 className="text-xl font-semibold text-black">
           Results ({data.length} records)
         </h2>
@@ -62,36 +63,38 @@ export default function DisbursementTable({ data }: DisbursementTableProps) {
         </button>
       </div>
 
-      {/* TABLE */}
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm text-center">
+      {/* TABLE WRAPPER: overflow-x-auto by default, visible on large screens */}
+      <div className="overflow-x-auto lg:overflow-x-visible">
+        {/* TABLE: min-w-max ensures table won't shrink below its content width, forcing overflow on small screens */}
+        <table className="min-w-max w-full border-collapse text-sm text-center">
           <thead>
             <tr className="border-b text-gray-500">
-              <th className="py-3 font-medium border-r">Date</th>
-              <th className="py-3 font-medium border-r">Deadline</th>
-              <th className="py-3 font-medium border-r">Month/s</th>
-              <th className="py-3 font-medium">Client Name</th>
-              <th className="py-3 font-medium">Amount</th>
-              <th className="py-3 font-medium">Interest</th>
-              <th className="py-3 font-medium">Status/Remarks</th>
-              <th className="py-3 font-medium">Actions</th>
+              <th className="py-3 px-4 font-medium border-r whitespace-nowrap">Date</th>
+              <th className="py-3 px-4 font-medium border-r whitespace-nowrap">Deadline</th>
+              <th className="py-3 px-4 font-medium border-r whitespace-nowrap">Month/s</th>
+              <th className="py-3 px-4 font-medium whitespace-nowrap">Client Name</th>
+              <th className="py-3 px-4 font-medium whitespace-nowrap">Amount</th>
+              <th className="py-3 px-4 font-medium whitespace-nowrap">Interest</th>
+              <th className="py-3 px-4 font-medium whitespace-nowrap">Status/Remarks</th>
+              <th className="py-3 px-4 font-medium whitespace-nowrap">Actions</th>
             </tr>
           </thead>
 
           <tbody>
             {paginatedData.map((row) => (
+              // The key uses row.id which is now correctly typed as a string
               <tr
-                key={row.id}
+                key={row.id} 
                 className="border-b hover:bg-gray-50 text-black text-lg"
               >
-                <td className="py-4 border-r">{formatDateForDisplay(row.date)}</td>
-                <td className="py-4 border-r">{formatDateForDisplay(row.deadline)}</td>
-                <td className="py-4 border-r">{row.monthsToPay}</td>
-                <td className="py-4">{row.name}</td>
-                <td className="py-4 font-semibold">{row.amount.toLocaleString()}</td>
-                <td className="py-4">{row.interest.toLocaleString()}</td>
-                <td className="py-4">{row.status}</td>
-                <td className="py-4 flex justify-center gap-2">
+                <td className="py-4 px-4 border-r whitespace-nowrap">{formatDateForDisplay(row.date)}</td>
+                <td className="py-4 px-4 border-r whitespace-nowrap">{formatDateForDisplay(row.deadline)}</td>
+                <td className="py-4 px-4 border-r whitespace-nowrap">{row.monthsToPay}</td>
+                <td className="py-4 px-4 whitespace-nowrap">{row.name}</td>
+                <td className="py-4 px-4 font-semibold whitespace-nowrap">{row.amount.toLocaleString()}</td>
+                <td className="py-4 px-4 whitespace-nowrap">{row.interest.toLocaleString()}</td>
+                <td className="py-4 px-4 whitespace-nowrap">{row.status}</td>
+                <td className="py-4 flex justify-center gap-2 px-4 whitespace-nowrap">
                   <button className="rounded-lg border p-2 bg-yellow-400 hover:bg-yellow-600">
                     ✏️
                   </button>
@@ -115,7 +118,7 @@ export default function DisbursementTable({ data }: DisbursementTableProps) {
 
       {/* PAGINATION CONTROLS */}
       {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-2 mt-5">
+        <div className="flex justify-center items-center gap-2 mt-5 text-black p-6 pt-0">
           <button
             onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
             disabled={currentPage === 1}

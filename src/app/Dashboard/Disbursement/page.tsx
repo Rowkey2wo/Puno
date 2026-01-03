@@ -96,7 +96,8 @@ export default function Disbursement() {
   }, [data, year, month, day]);
 
   return (
-    <div className="pt-5 pb-10 px-0 md:px-15">
+    // Added overflow-x-hidden here to prevent layout shift in the main page container
+    <div className="pt-5 pb-10 px-0 md:px-15 overflow-x-hidden">
       <h1 className="text-black font-extrabold my-5 text-3xl">
         Disbursement List
       </h1>
@@ -142,7 +143,10 @@ export default function Disbursement() {
       {loading ? (
         <p className="text-gray-500">Loading data from Firebase...</p>
       ) : (
-        <DisbursementTable data={filteredData} />
+        // The DisbursementTable already has the necessary internal overflow logic
+        <div className="grid grid-cols-1">
+          <DisbursementTable data={filteredData} />
+        </div>
       )}
     </div>
   );
