@@ -87,7 +87,7 @@ export default function Transaction() {
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 p-3 gap-5">
           {clients.map((client) => (
             <Link
-            href={`/Dashboard/Transaction/${client.id}`} // doc.id from Firestore
+            href={`/Dashboard/Transaction/${client.id}`}
             key={client.id}
             className="block"
           >

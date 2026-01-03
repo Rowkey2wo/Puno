@@ -157,44 +157,48 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
     );
   } else {
     tableContent = (
-      <table className="min-w-full divide-y">
-        <thead>
-          <tr>
-            <th className="text-left px-3 py-2 text-sm">Date</th>
-            <th className="text-left px-3 py-2 text-sm">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filteredAndSortedDailyData.map((d) => (
-            <tr key={d.id} className="border-t text-lg">
-              <td className="px-3 py-2">
-                {formatDate(d.DateToday.toDate())}
-              </td>
-              <td className="px-3 py-2 font-bold">
-                ₱{d.Amount.toLocaleString()}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="overflow-x-auto -mx-2 sm:mx-0">
+        <div className="inline-block min-w-full align-middle">
+          <table className="min-w-full divide-y">
+            <thead>
+              <tr>
+                <th className="text-left px-2 sm:px-3 py-2 text-xs sm:text-sm whitespace-nowrap">Date</th>
+                <th className="text-left px-2 sm:px-3 py-2 text-xs sm:text-sm whitespace-nowrap">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAndSortedDailyData.map((d) => (
+                <tr key={d.id} className="border-t">
+                  <td className="px-2 sm:px-3 py-2 text-sm sm:text-base whitespace-nowrap">
+                    {formatDate(d.DateToday.toDate())}
+                  </td>
+                  <td className="px-2 sm:px-3 py-2 font-bold text-sm sm:text-base whitespace-nowrap">
+                    ₱{d.Amount.toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     );
   }
 
   return (
-    <div className="bg-white shadow-lg rounded-xl p-6 text-black">
-      <div className="grid grid-cols-1 md:grid-cols-2 mb-5">
-        <div>
-          <h2 className="text-xl font-semibold">Daily Payment</h2>
+    <div className="bg-white shadow-lg rounded-xl p-4 sm:p-6 text-black w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-5">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-lg sm:text-xl font-semibold">Daily Payment</h2>
           {dateRange && (
-            <p className="text-sm text-gray-500 mt-1">{dateRange}</p>
+            <p className="text-xs sm:text-sm text-gray-500 mt-1 truncate">{dateRange}</p>
           )}
         </div>
 
-        <div className="text-center md:text-end">
+        <div className="flex-shrink-0">
           <button
             onClick={() => setIsModalOpen(true)}
             disabled={currentStatus === "Paid"}
-            className="bg-red-500 text-sm text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50"
+            className="w-full sm:w-auto bg-red-500 text-xs sm:text-sm text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
           >
             {currentStatus === "Paid"
               ? "Transaction Paid"
@@ -203,7 +207,7 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
         </div>
       </div>
 
-      <div className="overflow-x-scroll">{tableContent}</div>
+      {tableContent}
 
       <AddPaymentModal
         clientId={clientId}

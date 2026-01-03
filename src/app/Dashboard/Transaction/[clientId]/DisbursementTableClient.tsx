@@ -73,41 +73,45 @@ export default function DisbursementTable({ clientId }: { clientId: string }) {
   };
 
   return (
-    <div className="bg-white shadow-lg rounded-xl p-6 text-black">
-      <div className="flex justify-between">
-        <h2 className="text-xl font-semibold">Disbursements</h2>
+    <div className="bg-white shadow-lg rounded-xl p-4 sm:p-6 text-black w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+        <h2 className="text-lg sm:text-xl font-semibold">Disbursements</h2>
         {/* You can show a "See All" link if there are more than 10 items */}
         {data.length > MAX_ITEMS_TO_SHOW && (
-            <button className="border-b hover:text-indigo-700 cursor-pointer">See all ({data.length})</button> 
+            <button className="text-sm text-left sm:text-right border-b hover:text-indigo-700 cursor-pointer self-start sm:self-auto">
+              See all ({data.length})
+            </button> 
         )}
       </div>
 
-      <div className="overflow-x-scroll mt-4">
-        <table className="min-w-full divide-y">
-          <thead>
-            <tr>
-              <th className="text-left px-3 py-2 text-sm">Date</th>
-              <th className="text-left px-3 py-2 text-sm">Deadline</th>
-              <th className="text-left px-3 py-2 text-sm">Amount</th>
-              <th className="text-left px-3 py-2 text-sm">Remarks</th>
-              <th className="text-left px-3 py-2 text-sm">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {/* Use the limitedAndSortedData here */}
-            {limitedAndSortedData.map(d => ( 
-              <tr key={d.id} className="border-t text-lg">
-                <td className="px-3 py-2">{formatDate(d.DateToday)}</td>
-                <td className="px-3 py-2">{formatDate(d.Deadline)}</td>
-                <td className="px-3 py-2 font-bold">₱{d.Amount.toLocaleString()}</td>
-                <td className="px-3 py-2">{d.Remarks}</td>
-                <td className="px-3 py-2">{d.Status}</td>
+      <div className="overflow-x-auto -mx-2 sm:mx-0">
+        <div className="inline-block min-w-full align-middle">
+          <table className="min-w-full divide-y">
+            <thead>
+              <tr>
+                <th className="text-left px-2 sm:px-3 py-2 text-xs sm:text-sm whitespace-nowrap">Date</th>
+                <th className="text-left px-2 sm:px-3 py-2 text-xs sm:text-sm whitespace-nowrap">Deadline</th>
+                <th className="text-left px-2 sm:px-3 py-2 text-xs sm:text-sm whitespace-nowrap">Amount</th>
+                <th className="text-left px-2 sm:px-3 py-2 text-xs sm:text-sm whitespace-nowrap">Remarks</th>
+                <th className="text-left px-2 sm:px-3 py-2 text-xs sm:text-sm whitespace-nowrap">Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {/* Use the limitedAndSortedData here */}
+              {limitedAndSortedData.map(d => ( 
+                <tr key={d.id} className="border-t">
+                  <td className="px-2 sm:px-3 py-2 text-sm sm:text-base whitespace-nowrap">{formatDate(d.DateToday)}</td>
+                  <td className="px-2 sm:px-3 py-2 text-sm sm:text-base whitespace-nowrap">{formatDate(d.Deadline)}</td>
+                  <td className="px-2 sm:px-3 py-2 font-bold text-sm sm:text-base whitespace-nowrap">₱{d.Amount.toLocaleString()}</td>
+                  <td className="px-2 sm:px-3 py-2 text-sm sm:text-base whitespace-nowrap">{d.Remarks}</td>
+                  <td className="px-2 sm:px-3 py-2 text-sm sm:text-base whitespace-nowrap">{d.Status || '-'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         {limitedAndSortedData.length === 0 && (
-            <p className="text-center py-4 text-gray-500">No disbursements found for this client.</p>
+            <p className="text-center py-4 text-gray-500 text-sm">No disbursements found for this client.</p>
         )}
       </div>
     </div>

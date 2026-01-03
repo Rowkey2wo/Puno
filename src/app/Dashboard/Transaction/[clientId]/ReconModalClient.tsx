@@ -7,21 +7,29 @@ import { db } from "@/app/lib/firebase";
 import { useEffect, useState, useCallback } from "react";
 
 // Helper function to calculate a date N months in the future
-// NOW RETURNS A SINGLE STRING
+// FIXED: Now properly adds months without adjusting for day overflow
 const calculateFutureDateISO = (dateString: string, months: number): string => {
-    const date = new Date(dateString + 'T00:00:00'); 
-    
-    if (isNaN(date.getTime())) return "";
+    if (!dateString || months <= 0) return "";
 
-    const originalDay = date.getDate();
-    date.setMonth(date.getMonth() + months);
-    
-    if (date.getDate() !== originalDay && date.getDate() < originalDay) {
-        date.setDate(0); 
-    }
+    const [year, month, day] = dateString.split("-").map(Number);
+    const baseDate = new Date(year, month - 1, day);
 
-    // Return ONLY the YYYY-MM-DD part [0]
-    return date.toISOString().split("T")[0]; 
+    const targetMonth = baseDate.getMonth() + months;
+    const targetYear = baseDate.getFullYear() + Math.floor(targetMonth / 12);
+    const finalMonth = targetMonth % 12;
+
+    // Get the last day of the target month
+    const lastDayOfTargetMonth = new Date(targetYear, finalMonth + 1, 0).getDate();
+
+    // Use the original day, but cap it at the last day of the target month
+    const finalDay = Math.min(day, lastDayOfTargetMonth);
+    const finalDate = new Date(targetYear, finalMonth, finalDay);
+
+    const yyyy = finalDate.getFullYear();
+    const mm = String(finalDate.getMonth() + 1).padStart(2, "0");
+    const dd = String(finalDate.getDate()).padStart(2, "0");
+
+    return `${yyyy}-${mm}-${dd}`;
 };
 
 
@@ -36,19 +44,17 @@ export default function ReconModalClient({
 }) {
   
   // Helper function to get today's date in local YYYY-MM-DD format
-  // NOW RETURNS A SINGLE STRING
   const getTodayISO = (): string => {
     const today = new Date();
-    // Return ONLY the YYYY-MM-DD part [0]
     return new Date(today.getTime() - (today.getTimezoneOffset() * 60000)).toISOString().split("T")[0];
   };
 
   const [form, setForm] = useState({
-    Amount: "", // string
-    Interest: "", // string
-    MonthsToPay: "", // string
-    DateToday: getTodayISO(), // Now strictly a string YYYY-MM-DD
-    Deadline: "", // Now strictly a string YYYY-MM-DD
+    Amount: "",
+    Interest: "",
+    MonthsToPay: "",
+    DateToday: getTodayISO(),
+    Deadline: "",
   });
 
   const [isLoading, setIsLoading] = useState(true);
@@ -58,7 +64,6 @@ export default function ReconModalClient({
   const calculateDeadline = useCallback((monthsToPay: string, dateToday: string) => {
     const months = Number(monthsToPay);
     if (months > 0 && dateToday) {
-        // newDeadline is now a single string, fixing the type mismatch in setForm
         const newDeadline = calculateFutureDateISO(dateToday, months); 
         setForm(prevForm => ({ ...prevForm, Deadline: newDeadline }));
     } else {
@@ -81,7 +86,6 @@ export default function ReconModalClient({
                 const balance = data.Balance ?? 0;
                 setClientBalance(balance);
                 
-                // getTodayISO() returns a string, fixing type mismatch
                 setForm(prev => ({ ...prev, Amount: balance.toString(), DateToday: getTodayISO() }));
             } else {
                 setError('Client data not found.');
@@ -121,8 +125,7 @@ export default function ReconModalClient({
                 MonthsToPay: Number(form.MonthsToPay),
                 Remarks: "Recon", 
                 DateToday: serverTimestamp(), 
-                // form.Deadline is now strictly a string YYYY-MM-DD
-                Deadline: Timestamp.fromDate(new Date(form.Deadline + 'T00:00:00')), 
+                Deadline: Timestamp.fromDate(new Date(form.Deadline + 'T23:59:59')), 
                 Status: "",
             });
 

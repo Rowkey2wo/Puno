@@ -15,6 +15,12 @@ const statusStyles: Record<Status, string> = {
   Overdue: "bg-red-500",
   Paid: "bg-blue-600",
 };
+const BorderStyle: Record<Status, string> = {
+  OnGoing: "border-green-200",
+  Recon: "border-yellow-200",
+  Overdue: "border-red-200",
+  Paid: "border-blue-200",
+};
 
 export default function ClientCard({
     image,
@@ -35,7 +41,7 @@ export default function ClientCard({
   };
 
   return (
-      <div className="relative bg-white h-80 border-5 pt-4 w-full rounded-[10px] flex flex-col items-center text-center">
+      <div className={`relative bg-white h-80 border-5 pt-4 w-full rounded-[10px] flex flex-col items-center text-center ${BorderStyle[status]}`}>
         <div className="absolute w-full flex justify-end h-5 px-2">
           <p className={`rounded-full h-5 w-5 ${statusStyles[status]}`}></p>
         </div>

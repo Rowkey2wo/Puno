@@ -32,8 +32,9 @@ export default function DisbursementTable({ data }: DisbursementTableProps) {
             <table className="w-full border-collapse text-sm text-center">
             <thead>
                 <tr className="border-b text-gray-500">
-                <th className="py-3 font-medium">Date</th>
-                <th className="py-3 font-medium">Deadline</th>
+                <th className="py-3 font-medium border-r">Date</th>
+                <th className="py-3 font-medium border-r">Deadline</th>
+                <th className="py-3 font-medium border-r">Month/s</th>
                 <th className="py-3 font-medium">Client Name</th>
                 <th className="py-3 font-medium">Amount</th>
                 <th className="py-3 font-medium">Interest</th>
@@ -45,8 +46,9 @@ export default function DisbursementTable({ data }: DisbursementTableProps) {
             <tbody>
                 {data.map((row) => (
                 <tr key={row.id} className="border-b hover:bg-gray-50 text-black text-lg">
-                    <td className="py-4">{formatDateForDisplay(row.date)}</td>
-                    <td className="py-4">{formatDateForDisplay(row.deadline)}</td>
+                    <td className="py-4 border-r">{formatDateForDisplay(row.date)}</td>
+                    <td className="py-4 border-r">{formatDateForDisplay(row.deadline)}</td>
+                    <td className="py-4 border-r">{row.monthsToPay}</td>
                     <td className="py-4">{row.name}</td>
                     <td className="py-4 font-semibold">{row.amount.toLocaleString()}</td>
                     <td className="py-4">{row.interest.toLocaleString()}</td>

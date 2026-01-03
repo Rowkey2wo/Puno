@@ -4,7 +4,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { db } from '@/app/lib/firebase';
-import { doc, getDoc, collection, Timestamp, runTransaction } from 'firebase/firestore';
+import { doc, getDoc, collection, Timestamp, runTransaction, onSnapshot } from 'firebase/firestore';
 
 interface ClientBalanceInfo {
     balance: number;
@@ -27,8 +27,15 @@ export default function AddPaymentModal({
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
 
+    const [showPinModal, setShowPinModal] = useState(false);
+    const [pin, setPin] = useState('');
+    const [pinError, setPinError] = useState('');
+
+    const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
+    const [selectedUserId, setSelectedUserId] = useState<string>('');
+
+    // Fetch client balance
     const fetchClientBalance = useCallback(async () => {
-        // ... (Fetching logic remains the same) ...
         if (!open || !clientId) return;
         setIsLoading(true);
         setError('');
@@ -55,69 +62,134 @@ export default function AddPaymentModal({
         }
     }, [open, clientId]);
 
+    // Listen to User collection for all users
+    const listenUsers = useCallback(() => {
+        const unsubscribe = onSnapshot(collection(db, 'Users'), (snapshot) => {
+            const usersList: { id: string; name: string }[] = [];
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                usersList.push({ id: doc.id, name: data.name });
+            });
+            setUsers(usersList);
+            if (usersList.length > 0) setSelectedUserId(usersList[0].id); // default first user
+        }, (err) => {
+            console.error("Failed to listen users:", err);
+            setPinError("Failed to fetch users.");
+        });
+        return unsubscribe;
+    }, []);
+
     useEffect(() => {
         if (open) {
             fetchClientBalance();
+            const unsubscribeUsers = listenUsers();
             setPaymentAmount('');
+            setPin('');
+            setPinError('');
+            return () => unsubscribeUsers();
         }
-    }, [open, fetchClientBalance]);
+    }, [open, fetchClientBalance, listenUsers]);
 
     if (!open) return null;
 
-    const handlePaymentSubmit = async () => {
+    // Step 1: Submit payment click
+    const handlePaymentSubmit = () => {
         const amount = Number(paymentAmount);
-        
         if (isNaN(amount) || amount <= 0) {
             setError('Please enter a valid amount.');
             return;
         }
-
         if (!clientInfo) {
             setError('Client data not loaded.');
             return;
         }
-        
         if (amount > clientInfo.balance) {
             setError('Payment amount cannot exceed the current balance.');
             return;
         }
-
         if (!currentDisbursementId || currentDisbursementId === 'N/A') {
             setError('Cannot submit payment: No active disbursement found.');
             return;
+        }
+
+        setShowPinModal(true);
+    };
+
+    // Step 2: Confirm PIN
+    const handlePinConfirm = async () => {
+        if (!selectedUserId) {
+            setPinError('Please select a user.');
+            return;
+        }
+
+        try {
+            const userRef = doc(db, 'Users', selectedUserId);
+            const userSnap = await getDoc(userRef);
+
+            if (!userSnap.exists()) {
+                setPinError('User not found.');
+                return;
+            }
+
+            const userData = userSnap.data();
+            console.log('Selected User ID:', selectedUserId);
+            console.log('User Data:', userData);
+            console.log('Stored PIN:', userData.PIN);
+            console.log('Entered PIN:', pin);
+            
+            // Handle both string and number PINs, and check both PIN and pin field names
+            const storedPin = String(userData.PIN ?? userData.pin ?? '');
+            const enteredPin = String(pin);
+            
+            if (enteredPin !== storedPin) {
+                setPinError('Incorrect PIN. Please try again.');
+                return;
+            }
+
+            setPinError('');
+            setShowPinModal(false);
+            await processPayment();
+
+        } catch (err) {
+            console.error('PIN verification error:', err);
+            setPinError('Failed to verify PIN.');
+        }
+    };
+
+    // Step 3: Process payment
+    const processPayment = async () => {
+        const amount = Number(paymentAmount);
+        if (!clientInfo) return;
+        
+        if (!currentDisbursementId || currentDisbursementId === 'N/A') {
+            console.error("Error: currentDisbursementId is missing during processPayment.");
+            setError('Internal error: Missing disbursement ID.');
+            setIsLoading(false);
+            return; 
         }
 
         setIsLoading(true);
 
         try {
             const newBalance = clientInfo.balance - amount;
-            // The client's status is set to "Paid" if their overall balance is 0 or less
             const newClientStatus = newBalance <= 0 ? 'Paid' : clientInfo.status;
-            
-            // The status of the specific disbursement is also set to "Paid" if the balance is cleared
             const newDisbursementStatus = newBalance <= 0 ? 'Paid' : '';
-
 
             await runTransaction(db, async (transaction) => {
                 const clientRef = doc(db, 'Clients', clientId);
-                
-                // 1. Update the Client's Master Balance and Status
                 transaction.update(clientRef, {
                     Balance: newBalance,
                     Status: newClientStatus,
                 });
 
-                // 2. Add a new payment record to the DailyList collection
                 const newPaymentRef = doc(collection(db, "DailyList")); 
                 transaction.set(newPaymentRef, { 
-                    clientId: clientId,
+                    clientId,
                     Amount: amount,
                     DateToday: Timestamp.now(),
                     DisbursementID: currentDisbursementId,
                 });
 
-                // 3. Update the specific Disbursement document's Status field (New Logic)
-                // This is needed because you use this 'Status' field in your DisbursementTable UI
                 const disbursementRef = doc(db, 'Disbursement', currentDisbursementId);
                 transaction.update(disbursementRef, {
                     Status: newDisbursementStatus
@@ -130,66 +202,96 @@ export default function AddPaymentModal({
             setError('Payment processing failed. Please try again.');
         } finally {
             setIsLoading(false);
+            setPin('');
         }
     };
 
-    const isSubmitDisabled = 
-        isLoading || 
-        Number(paymentAmount) <= 0 || 
-        !currentDisbursementId || 
-        (clientInfo && Number(paymentAmount) > clientInfo.balance);
+    // FIX APPLIED HERE: Use an IIFE to wrap the logic.
+    // The IIFE returns a definitive 'boolean' value, satisfying the strict prop type check.
+    const isSubmitDisabled = (() => {
+        const isIdMissing = !currentDisbursementId || currentDisbursementId === 'N/A';
+        const isAmountInvalid = isNaN(Number(paymentAmount)) || Number(paymentAmount) <= 0;
+        const isOverBalance = clientInfo ? Number(paymentAmount) > clientInfo.balance : false;
+
+        return isLoading || isAmountInvalid || isIdMissing || isOverBalance;
+    })();
+
 
     return (
+        <>
+        {/* Main Add Payment Modal */}
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4">
-            <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl p-6 text-black">
-                <h3 className="text-xl font-semibold mb-4">Add Payment</h3>
+            <div className="bg-white p-6 rounded-lg shadow-2xl w-full max-w-lg">
+                <h2 className="text-2xl font-bold mb-4">Add Payment</h2>
+                {error && <p className="text-red-500 mb-4">{error}</p>}
+                {clientInfo && (
+                    <div className="mb-4 p-3 bg-gray-100 rounded">
+                        <p className="text-lg">Current Balance: <strong>₱{clientInfo.balance.toLocaleString()}</strong></p>
+                        {/* <p>Status: {clientInfo.status}</p>
+                        <p>Active Disbursement ID: {currentDisbursementId || 'N/A'}</p> */}
+                    </div>
+                )}
                 
-                {isLoading ? (
-                    <p>Loading client info...</p>
-                ) : clientInfo ? (
-                    <div className="space-y-4">
-                        <div className="p-3 bg-gray-100 rounded-lg">
-                            <p className="text-sm">Current Balance:</p>
-                            <p className="text-2xl font-bold">₱{clientInfo.balance.toLocaleString()}</p>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium mb-1">Payment Amount</label>
-                            <input
-                                type="number"
-                                placeholder="Enter amount received"
-                                className="w-full rounded-lg border border-gray-300 p-2 focus:ring-2 focus:ring-indigo-500 outline-none"
-                                value={paymentAmount}
-                                onChange={(e) => {
-                                    setPaymentAmount(e.target.value);
-                                    if (error) setError(''); 
-                                }}
-                            />
-                        </div>
-
-                        {error && <p className="text-sm text-red-600">{error}</p>}
-
-                        <div className="flex justify-end gap-3 mt-6">
-                            <button
-                                onClick={onClose}
-                                className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-100"
-                                disabled={isLoading}
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handlePaymentSubmit}
-                                className="px-5 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-                                disabled={!!isSubmitDisabled} 
+                {!showPinModal ? (
+                    // Payment Input View
+                    <div>
+                        <input
+                            type="number"
+                            placeholder="Enter Amount"
+                            value={paymentAmount}
+                            onChange={(e) => setPaymentAmount(e.target.value)}
+                            className="w-full p-3 border border-gray-300 rounded mb-4"
+                            disabled={isLoading}
+                        />
+                        <div className="flex justify-end space-x-3">
+                            <button onClick={onClose} className="px-4 py-2 border rounded">Cancel</button>
+                            <button 
+                                onClick={handlePaymentSubmit} 
+                                className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+                                disabled={isSubmitDisabled} 
                             >
                                 Submit Payment
                             </button>
                         </div>
                     </div>
                 ) : (
-                    <p>{error || "Could not load client details."}</p>
+                    // PIN Confirmation View
+                    <div>
+                        <p className="mb-4">Select user:</p>
+                        {pinError && <p className="text-red-500 mb-4">{pinError}</p>}
+                        
+                        <select 
+                            value={selectedUserId} 
+                            onChange={(e) => setSelectedUserId(e.target.value)}
+                            className="w-full p-3 border border-gray-300 rounded mb-4"
+                        >
+                            {users.map(user => (
+                                <option key={user.id} value={user.id}>{user.name}</option>
+                            ))}
+                        </select>
+                        
+                        <input
+                            type="password"
+                            placeholder="Enter PIN"
+                            value={pin}
+                            onChange={(e) => setPin(e.target.value)}
+                            className="w-full p-3 border border-gray-300 rounded mb-4"
+                            disabled={isLoading}
+                        />
+                        <div className="flex justify-end space-x-3">
+                            <button onClick={() => setShowPinModal(false)} className="px-4 py-2 border rounded">Back</button>
+                            <button 
+                                onClick={handlePinConfirm} 
+                                className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50"
+                                disabled={isLoading || !selectedUserId || pin.length === 0}
+                            >
+                                Confirm
+                            </button>
+                        </div>
+                    </div>
                 )}
             </div>
         </div>
+        </>
     );
 }

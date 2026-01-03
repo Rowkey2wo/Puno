@@ -7,6 +7,7 @@ import { db } from "@/app/lib/firebase";
 import ClientHeaderActions from "./ClientHeaderActions";
 import DisbursementTable from "./DisbursementTableClient";
 import DailyTableClient from "./DailyTableClient";
+import Link from "next/link";
 
 type ClientData = {
   ClientName: string;
@@ -21,7 +22,7 @@ export default function ClientDetails({
 }: {
   params: Promise<{ clientId: string }>;
 }) {
-  // ✅ UNWRAP ASYNC PARAMS
+
   const { clientId } = use(params);
 
   const [client, setClient] = useState<ClientData | null>(null);
@@ -32,7 +33,6 @@ export default function ClientDetails({
 
     const ref = doc(db, "Clients", clientId);
 
-    // 🔴 REALTIME LISTENER
     const unsub = onSnapshot(ref, (snap) => {
       if (snap.exists()) {
         setClient(snap.data() as ClientData);
@@ -64,18 +64,19 @@ export default function ClientDetails({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-linear-to-br from-indigo-50 to-purple-100 p-6">
       <div className="max-w-6xl mx-auto">
 
         {/* HEADER */}
-        <div className="bg-white shadow-lg rounded-xl p-4 sm:p-6 mb-8">
+        <div className="bg-white shadow-lg rounded-xl p-6 mb-8">
           <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
 
             <div className="flex flex-col md:flex-row md:items-center gap-4 w-full">
 
               {/* Avatar */}
               <div className="mx-auto md:mx-0 h-16 w-16 sm:h-20 sm:w-20 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-2xl sm:text-3xl font-semibold">
-                {client.ClientName.charAt(0)}
+                {/* {client.ClientName.charAt(0)} */}
+                <img src="/ClientIMG.png" alt="" className="rounded-full h-20"/>
               </div>
 
               {/* Name */}
@@ -86,6 +87,13 @@ export default function ClientDetails({
                 <p className="text-gray-500 text-sm">
                   {client.Nickname || "No nickname"}
                 </p>
+                <div>
+                    <Link
+                      href={`/Dashboard/Transaction/${clientId}/EditProfile`}
+                      className="text-sm border-b text-blue-500">
+                      Update Client
+                    </Link>
+                </div>
               </div>
 
               {/* Status */}
@@ -98,9 +106,12 @@ export default function ClientDetails({
                   {client.Status}
                 </span>
               </div>
+              
+
             </div>
 
-            {/* Actions */}
+            
+            {/* Actions */} 
             <div className="w-full md:w-auto md:ml-auto">
               <ClientHeaderActions clientId={clientId} />
             </div>
@@ -118,12 +129,12 @@ export default function ClientDetails({
         </div>
 
         {/* TABLES */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="col-span-12 lg:col-span-4">
+        <div className="grid grid-cols-1 lg:grid-cols-12">
+          <div className="col-span-12 lg:col-span-4 mb-8">
             <DailyTableClient clientId={clientId} />
           </div>
 
-          <div className="col-span-12 lg:col-span-8">
+          <div className="col-span-12 lg:col-span-8 ps-0 lg:ps-8">
             <DisbursementTable clientId={clientId} />
           </div>
         </div>
