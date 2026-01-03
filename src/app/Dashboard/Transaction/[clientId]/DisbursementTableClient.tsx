@@ -5,6 +5,7 @@
 import { collection, query, where, onSnapshot, Timestamp, DocumentData } from "firebase/firestore";
 import { db } from "@/app/lib/firebase";
 import { useEffect, useState, useMemo } from "react"; 
+import Link from "next/link";
 
 // Define the type for the data we expect from Firebase
 interface DisbursementData extends DocumentData {
@@ -77,11 +78,14 @@ export default function DisbursementTable({ clientId }: { clientId: string }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
         <h2 className="text-lg sm:text-xl font-semibold">Disbursements</h2>
         {/* You can show a "See All" link if there are more than 10 items */}
-        {data.length > MAX_ITEMS_TO_SHOW && (
-            <button className="text-sm text-left sm:text-right border-b hover:text-indigo-700 cursor-pointer self-start sm:self-auto">
+            {/* <button className="text-sm text-left sm:text-right border-b hover:text-indigo-700 cursor-pointer self-start sm:self-auto">
               See all ({data.length})
-            </button> 
-        )}
+            </button>  */}
+            <Link href={`/Dashboard/Transaction/${clientId}/SeeAllDisburseClient`}>
+              <button className="text-sm text-left sm:text-right border-b hover:text-indigo-700 cursor-pointer self-start sm:self-auto">
+              See all ({data.length})
+              </button>
+            </Link>
       </div>
 
       <div className="overflow-x-auto -mx-2 sm:mx-0">

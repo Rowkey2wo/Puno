@@ -194,7 +194,7 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
           )}
         </div>
 
-        <div className="flex-shrink-0">
+        <div className="shrink-0">
           <button
             onClick={() => setIsModalOpen(true)}
             disabled={currentStatus === "Paid"}

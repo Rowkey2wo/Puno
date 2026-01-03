@@ -51,13 +51,13 @@ export default function ClientDetails({
   const getStatusColor = (status: string) => {
     switch (status) {
       case "OnGoing":
-        return "bg-green-600 text-white";
+        return "bg-blue-600 text-white";
       case "Recon":
         return "bg-yellow-400 text-white";
       case "Overdue":
         return "bg-red-500 text-white";
       case "Paid":
-        return "bg-blue-600 text-white";
+        return "bg-green-600 text-white";
       default:
         return "bg-gray-500 text-white";
     }

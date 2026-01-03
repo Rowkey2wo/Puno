@@ -1,4 +1,18 @@
-export default function SearchBar() {
+"use client";
+
+type SearchBarProps = {
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  placeholder?: string;
+};
+
+
+export default function SearchBar({
+  value,
+  onChange,
+  placeholder = "Search...",
+}:SearchBarProps) {
+  
     return (
       <div className="relative w-full">
         <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
@@ -19,7 +33,9 @@ export default function SearchBar() {
   
         <input
           type="text"
-          placeholder="Search Client..."
+          value={value}
+          onChange={onChange} 
+          placeholder={placeholder}
           className="w-full rounded-md border border-gray-300 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
         />
       </div>

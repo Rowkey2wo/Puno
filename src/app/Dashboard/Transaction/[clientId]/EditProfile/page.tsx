@@ -118,9 +118,10 @@ export default function EditProfile({
                 alt="Client"
               />
             ) : (
-              <span className="text-4xl font-bold text-indigo-600">
-                {clientName.charAt(0)}
-              </span>
+              <div className="mx-auto md:mx-0 h-16 w-16 sm:h-20 sm:w-20 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-2xl sm:text-3xl font-semibold">
+                {/* {client.ClientName.charAt(0)} */}
+                <img src="/ClientIMG.png" alt="" className="rounded-full h-20"/>
+              </div>
             )}
           </div>
         </div>
