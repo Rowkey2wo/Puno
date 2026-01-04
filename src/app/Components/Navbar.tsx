@@ -7,12 +7,15 @@ type NavbarProps = {
 export default function Navbar({ onMenuClick }: NavbarProps) {
   return (
     <header className="w-full border-b border-gray-300 shadow-2xl bg-yellow-100">
-      <div className="relative flex h-14 items-center px-4">
+      <div className="relative flex h-14 justify-center items-center px-4">
         
-        <h1 className="mx-auto text-3xl font-extrabold text-green-900 tracking-wide">
+        {/* <h1 className="mx-auto text-3xl font-extrabold text-green-900 tracking-wide">
           PUNO
-        </h1>
-
+        </h1> */}
+        <img src="/PunoLogo.png" className="h-40 pt-4 w-25" alt="" />
+        {/* <div className="flex justify-center  border border-white">
+          <img src="/PunoLogo.png" className="h-40 pt-4 w-25 border border-black" alt="" />
+        </div> */}
         
         <button
           onClick={onMenuClick}

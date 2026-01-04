@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { db } from "@/app/lib/firebase";
 import { doc, setDoc, collection } from "firebase/firestore";
 
@@ -16,6 +16,25 @@ export default function AddClientModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const [isPrivate, setIsPrivate] = useState("No");
+  const [clientPIN, setClientPIN] = useState("");
+  const [loggedUser, setLoggedUser] = useState<{ id: string; name: string } | null>(null);
+
+  // Fetch logged-in user from sessionStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedUser = sessionStorage.getItem("loggedUser");
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          setLoggedUser({ id: parsed.id, name: parsed.name });
+        } catch (e) {
+          console.error("Failed to parse loggedUser:", e);
+        }
+      }
+    }
+  }, []);
+
   if (!open) return null;
 
   const handleSubmit = async () => {
@@ -23,15 +42,20 @@ export default function AddClientModal({
       setError("Client name is required.");
       return;
     }
-  
+
+    if (isPrivate === "Yes" && !clientPIN.trim()) {
+      setError("Client PIN is required for private clients.");
+      return;
+    }
+
     setLoading(true);
     setError("");
-  
+
     try {
       const ref = doc(collection(db, "Clients"));
-  
+
       await setDoc(ref, {
-        clientId: ref.id,                 // 🔥 document ID
+        clientId: ref.id,
         ClientName: clientName.trim(),
         Nickname: nickname || null,
         Balance: 0,
@@ -39,11 +63,15 @@ export default function AddClientModal({
         ClientImage: "/ClientIMG.png",
         ImageUrl: "",
         ValidID: "/ValidIDSampleImg.png",
+        isPrivate: isPrivate,                  // "Yes" or "No"
+        ClientPIN: isPrivate === "Yes" ? clientPIN.trim() : null,
       });
-  
+
       onClose();
       setClientName("");
       setNickname("");
+      setIsPrivate("No");
+      setClientPIN("");
     } catch (err) {
       console.error(err);
       setError("Failed to add client.");
@@ -51,6 +79,10 @@ export default function AddClientModal({
       setLoading(false);
     }
   };
+
+  // Only show "Is Private" select for specific users
+  const canSetPrivate =
+    loggedUser?.name === "Kim Teene" || loggedUser?.name === "Ruki";
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
@@ -73,6 +105,30 @@ export default function AddClientModal({
             onChange={(e) => setNickname(e.target.value)}
             className="w-full border rounded-lg p-2"
           />
+
+          {canSetPrivate && (
+            <>
+              <label className="block text-sm font-medium">Private Client?</label>
+              <select
+                value={isPrivate}
+                onChange={(e) => setIsPrivate(e.target.value)}
+                className="w-full border rounded-lg p-2"
+              >
+                <option value="No">No</option>
+                <option value="Yes">Yes</option>
+              </select>
+
+              {isPrivate === "Yes" && (
+                <input
+                  type="password"
+                  placeholder="Set Client PIN"
+                  value={clientPIN}
+                  onChange={(e) => setClientPIN(e.target.value)}
+                  className="w-full border rounded-lg p-2"
+                />
+              )}
+            </>
+          )}
 
           {error && (
             <p className="text-sm text-red-600">{error}</p>

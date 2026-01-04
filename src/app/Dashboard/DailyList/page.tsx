@@ -6,6 +6,8 @@ import { db } from "@/app/lib/firebase";
 import DailyTable from "@/app/Components/DailyTable";
 
 type TableRow = {
+  id: string;
+  clientId: string;
   name: string;
   amount: number;
   date: string;
@@ -29,8 +31,7 @@ export default function DailyList() {
       const unsubDaily = onSnapshot(dailyRef, (dailySnap) => {
         const rows: TableRow[] = dailySnap.docs.map((doc) => {
           const d = doc.data();
-
-          // Convert Timestamp to string
+        
           const dateStr =
             d.DateToday instanceof Timestamp
               ? d.DateToday.toDate().toLocaleDateString("en-US", {
@@ -38,18 +39,16 @@ export default function DailyList() {
                   month: "short",
                   year: "numeric",
                 })
-              : new Date().toLocaleDateString("en-US", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                });
-
+              : "";
           return {
-            name: clientMap[d.clientId] || "Unknown",
-            amount: d.Amount ?? 0,
-            date: dateStr,
+              id: doc.id,
+              clientId: d.clientId, // 🔥 REQUIRED
+              name: clientMap[d.clientId] || "Unknown",
+              amount: d.Amount ?? 0,
+              date: dateStr,
           };
         });
+        
 
         // Sort by newest first
         rows.sort((a, b) => {

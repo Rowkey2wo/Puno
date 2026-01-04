@@ -1,14 +1,9 @@
 "use client";
 
-import {
-  collection,
-  Timestamp,
-  doc,
-  runTransaction,
-  getDoc,
-} from "firebase/firestore";
+import { useState, useEffect, useCallback } from "react";
+import { doc, updateDoc, Timestamp, getDoc } from "firebase/firestore";
 import { db } from "@/app/lib/firebase";
-import { useEffect, useState, useCallback } from "react";
+import type { DisbursementRow } from "./page";
 
 const calculateFutureDateISO = (dateString: string, months: number) => {
   if (!dateString || months <= 0) return "";
@@ -31,15 +26,17 @@ const calculateFutureDateISO = (dateString: string, months: number) => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-export default function DisbursementModalClient({
-  clientId,
-  open,
-  onClose,
-}: {
-  clientId: string;
+type UpdateDisbursementModalProps = {
   open: boolean;
   onClose: () => void;
-}) {
+  row: DisbursementRow | null;
+};
+
+export default function UpdateDisbursementModal({
+  open,
+  onClose,
+  row,
+}: UpdateDisbursementModalProps) {
   const getTodayISO = () => {
     const today = new Date();
     return new Date(today.getTime() - today.getTimezoneOffset() * 60000)
@@ -53,60 +50,41 @@ export default function DisbursementModalClient({
     MonthsToPay: "",
     DateToday: getTodayISO(),
     Deadline: "",
-    Remarks: "Release",
+    Remarks: "",
   });
 
   const [error, setError] = useState("");
-  const [clientBalance, setClientBalance] = useState<number | null>(null);
-  const [isLoadingClient, setIsLoadingClient] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
+  // PIN verification state
   const [showPinModal, setShowPinModal] = useState(false);
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
-  const [loggedUser, setLoggedUser] = useState<{ id: string; name: string; PIN: string } | null>(null);
+  const [loggedUser, setLoggedUser] = useState<{ id: string; name: string } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  const calculateDeadline = useCallback(
-    (monthsToPay: string, dateToday: string) => {
-      const months = Number(monthsToPay);
-      if (months > 0 && dateToday) {
-        const deadline = calculateFutureDateISO(dateToday, months);
-        setForm((prev) => ({ ...prev, Deadline: deadline }));
-      } else {
-        setForm((prev) => ({ ...prev, Deadline: "" }));
-      }
-    },
-    []
-  );
-
-  const fetchClientBalance = useCallback(async () => {
-    if (!open || !clientId) return;
-    setIsLoadingClient(true);
-    try {
-      const clientRef = doc(db, "Clients", clientId);
-      const clientSnap = await getDoc(clientRef);
-      if (clientSnap.exists()) {
-        const data = clientSnap.data();
-        setClientBalance(data.Balance ?? 0);
-      } else {
-        setError("Client not found.");
-      }
-    } catch (err) {
-      console.error("Error fetching client balance:", err);
-      setError("Failed to fetch client data.");
-    } finally {
-      setIsLoadingClient(false);
+  useEffect(() => {
+    if (row) {
+      setForm({
+        Amount: row.amount.toString(),
+        Interest: row.interest.toString(),
+        MonthsToPay: row.monthsToPay.toString(),
+        DateToday: row.date.toISOString().split("T")[0],
+        Deadline: row.deadline.toISOString().split("T")[0],
+        Remarks: row.status,
+      });
+      setError("");
     }
-  }, [open, clientId]);
+  }, [row]);
 
-  // 🔹 Get logged-in user from sessionStorage
+  // Load logged-in user from sessionStorage
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storedUser = sessionStorage.getItem("loggedUser");
       if (storedUser) {
         try {
           const parsed = JSON.parse(storedUser);
-          setLoggedUser({ id: parsed.id, name: parsed.name, PIN: "" });
+          setLoggedUser({ id: parsed.id, name: parsed.name });
         } catch (e) {
           console.error("Failed to parse loggedUser:", e);
         }
@@ -114,41 +92,39 @@ export default function DisbursementModalClient({
     }
   }, []);
 
-  useEffect(() => {
-    if (open) {
-      setForm({
-        Amount: "",
-        Interest: "",
-        MonthsToPay: "",
-        DateToday: getTodayISO(),
-        Deadline: "",
-        Remarks: "Release",
-      });
-      setError("");
-      setShowPinModal(false);
-      setPin("");
-      setPinError("");
-      fetchClientBalance();
+  const calculateDeadline = useCallback((months: string, dateToday: string) => {
+    const mons = Number(months);
+    if (mons > 0 && dateToday) {
+      const deadline = calculateFutureDateISO(dateToday, mons);
+      setForm((prev) => ({ ...prev, Deadline: deadline }));
     }
-  }, [open, fetchClientBalance]);
+  }, []);
 
-  if (!open) return null;
+  const handleSubmit = () => {
+    const amt = Number(form.Amount);
+    const intr = Number(form.Interest);
+    const mons = Number(form.MonthsToPay);
+    const dt = new Date(form.DateToday);
+    const dd = new Date(form.Deadline);
 
-  const handleSaveClick = () => {
-    if (!form.Amount || !form.Interest || !form.MonthsToPay || !form.DateToday || !form.Deadline) {
-      setError("All fields are required.");
+    if (!amt || amt < 0) {
+      setError("Enter a valid amount.");
       return;
     }
-    if (clientBalance === null) {
-      setError("Client balance not loaded. Please try again.");
+    if (isNaN(intr) || intr < 0) {
+      setError("Enter a valid interest.");
       return;
     }
-    if (clientBalance !== 0) {
-      setError("Cannot create new disbursement. Client balance must be 0.");
+    if (!mons || mons <= 0) {
+      setError("Enter valid months to pay.");
+      return;
+    }
+    if (isNaN(dt.getTime()) || isNaN(dd.getTime())) {
+      setError("Enter valid dates.");
       return;
     }
     if (!loggedUser) {
-      setError("No logged-in user detected.");
+      setError("No logged-in user found.");
       return;
     }
 
@@ -157,108 +133,75 @@ export default function DisbursementModalClient({
   };
 
   const handlePinConfirm = async () => {
-    if (!loggedUser) {
-      setPinError("No user found.");
-      return;
-    }
+    if (!loggedUser) return;
 
+    setIsProcessing(true);
     try {
       const userRef = doc(db, "Users", loggedUser.id);
       const userSnap = await getDoc(userRef);
-
       if (!userSnap.exists()) {
         setPinError("User not found.");
+        setIsProcessing(false);
         return;
       }
 
-      const userData = userSnap.data();
-      const storedPin = String(userData.PIN ?? userData.pin ?? "");
-      const enteredPin = String(pin);
-
-      console.log("Entered PIN:", enteredPin);
-      console.log("Stored PIN:", storedPin);
-
-      if (enteredPin !== storedPin) {
+      const storedPin = String(userSnap.data().PIN ?? userSnap.data().pin ?? "");
+      if (pin !== storedPin) {
         setPinError("Incorrect PIN. Please try again.");
+        setIsProcessing(false);
         return;
       }
 
       setPinError("");
-      setShowPinModal(false);
-      await processDisbursement();
+      await processUpdate();
     } catch (err) {
-      console.error("PIN verification error:", err);
+      console.error(err);
       setPinError("Failed to verify PIN.");
+      setIsProcessing(false);
     }
   };
 
-  const processDisbursement = async () => {
-    if (!loggedUser) return;
+  const processUpdate = async () => {
+    if (!row) return;
 
     setIsProcessing(true);
-    const amount = Number(form.Amount);
-    const [year, month, day] = form.DateToday.split("-").map(Number);
-    const now = new Date();
-    const dateWithCurrentTime = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds());
-
     try {
-      await runTransaction(db, async (transaction) => {
-        const clientRef = doc(db, "Clients", clientId);
-        const clientSnap = await transaction.get(clientRef);
+      const amt = Number(form.Amount);
+      const intr = Number(form.Interest);
+      const mons = Number(form.MonthsToPay);
+      const dt = new Date(form.DateToday);
+      const dd = new Date(form.Deadline);
 
-        if (!clientSnap.exists()) throw new Error("Client does not exist");
-        if ((clientSnap.data().Balance ?? 0) !== 0)
-          throw new Error("Client balance must be 0 to create new disbursement.");
-
-        const disbursementRef = doc(collection(db, "Disbursement"));
-        transaction.set(disbursementRef, {
-          clientId,
-          Amount: amount,
-          Interest: Number(form.Interest),
-          MonthsToPay: Number(form.MonthsToPay),
-          Remarks: form.Remarks,
-          Status: "",
-          DateToday: Timestamp.fromDate(dateWithCurrentTime),
-          Deadline: Timestamp.fromDate(new Date(form.Deadline + "T23:59:59")),
-        });
-
-        transaction.update(clientRef, {
-          Balance: amount,
-          Status: "OnGoing",
-        });
+      const disRef = doc(db, "Disbursement", row.id);
+      await updateDoc(disRef, {
+        Amount: amt,
+        Interest: intr,
+        MonthsToPay: mons,
+        DateToday: Timestamp.fromDate(dt),
+        Deadline: Timestamp.fromDate(dd),
+        Remarks: form.Remarks, // Status read-only
       });
 
       onClose();
     } catch (err) {
-      console.error("Transaction failed:", err);
-      setError(err instanceof Error ? err.message : "Failed to save disbursement.");
+      console.error(err);
+      setError("Failed to update disbursement.");
     } finally {
       setIsProcessing(false);
       setPin("");
+      setShowPinModal(false);
     }
   };
+
+  if (!open || !row) return null;
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 px-4">
       <div className="bg-white w-full max-w-xl rounded-2xl shadow-xl p-6 text-black max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6 bg-blue-200 p-4 rounded">
-          <h3 className="text-xl font-semibold">New Disbursement</h3>
-          <button onClick={onClose}>✕</button>
+        <div className="flex items-center justify-between mb-6 bg-indigo-200 p-4 rounded">
+          <h3 className="text-xl font-semibold">Update Disbursement</h3>
+          <button onClick={onClose} className="text-xl font-bold">✕</button>
         </div>
-
-        {isLoadingClient ? (
-          <p className="text-sm text-gray-600 mb-4">Loading client data...</p>
-        ) : clientBalance !== null ? (
-          <div className="mb-4 p-3 bg-gray-100 rounded">
-            <p className="text-sm">
-              Current Client Balance:{" "}
-              <strong className={clientBalance === 0 ? "text-green-600" : "text-red-600"}>
-                ${clientBalance.toFixed(2)}
-              </strong>
-            </p>
-            {clientBalance !== 0 && <p className="text-xs text-red-600 mt-1">⚠️ Balance must be 0 to create a new disbursement</p>}
-          </div>
-        ) : null}
 
         {!showPinModal ? (
           <>
@@ -312,6 +255,9 @@ export default function DisbursementModalClient({
                   <option value="1">1 Month</option>
                   <option value="2">2 Months</option>
                   <option value="3">3 Months</option>
+                  <option value="4">4 Months</option>
+                  <option value="5">5 Months</option>
+                  <option value="6">6 Months</option>
                 </select>
               </div>
 
@@ -324,42 +270,46 @@ export default function DisbursementModalClient({
                   readOnly
                 />
               </div>
-            </div>
 
-            <div className="mt-4">
-              <label className="text-sm font-medium">Remarks</label>
-              <select
-                className="w-full border rounded p-2"
-                value={form.Remarks}
-                onChange={(e) => setForm({ ...form, Remarks: e.target.value })}
-              >
-                <option value="Release">Release</option>
-              </select>
+              <div className="md:col-span-2">
+                <label className="text-sm font-medium">Status / Remarks</label>
+                <input
+                  type="text"
+                  className="w-full border rounded p-2 bg-gray-100 cursor-not-allowed"
+                  value={form.Remarks}
+                  disabled
+                />
+              </div>
             </div>
 
             {error && <p className="text-red-600 text-sm mt-4">{error}</p>}
 
             <div className="flex justify-end gap-3 mt-6">
-              <button onClick={onClose} className="px-4 py-2 border rounded">Cancel</button>
               <button
-                onClick={handleSaveClick}
-                className="px-5 py-2 bg-indigo-600 text-white rounded disabled:opacity-50"
-                disabled={isLoadingClient || clientBalance !== 0}
+                onClick={onClose}
+                className="px-4 py-2 border rounded"
+                disabled={isLoading}
               >
-                Save Disbursement
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                className={`px-5 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50`}
+                disabled={isLoading}
+              >
+                {isLoading ? "Processing..." : "Update"}
               </button>
             </div>
           </>
         ) : (
           <div>
-            <p className="mb-4">Confirm disbursement using your PIN:</p>
+            <p className="mb-4">Confirm update using your PIN:</p>
             {pinError && <p className="text-red-500 mb-4">{pinError}</p>}
 
-            {/* Disabled logged-in user */}
             <input
               type="text"
               value={loggedUser?.name ?? ""}
-              className="w-full p-3 border border-gray-300 rounded mb-4 bg-gray-100"
+              className="w-full p-3 border rounded mb-4 bg-gray-100"
               disabled
             />
 
@@ -368,7 +318,7 @@ export default function DisbursementModalClient({
               placeholder="Enter PIN"
               value={pin}
               onChange={(e) => setPin(e.target.value)}
-              className="w-full p-3 border border-gray-300 rounded mb-4"
+              className="w-full p-3 border rounded mb-4"
               disabled={isProcessing}
             />
 

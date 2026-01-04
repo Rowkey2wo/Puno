@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-// Import DisbursementRow from the correct source file
 import type { DisbursementRow } from "@/app/Dashboard/Disbursement/page"; 
 import * as XLSX from "xlsx";
+import UpdateDisbursementModal from "@/app/Dashboard/Disbursement/UpdateDisbursementModal";
+import DeleteDisbursementModal from "@/app/Dashboard/Disbursement/DeleteDisbursementModal";
 
 type DisbursementTableProps = {
   data: DisbursementRow[];
@@ -19,12 +20,14 @@ const formatDateForDisplay = (dateObj: Date) => {
 
 export default function DisbursementTable({ data }: DisbursementTableProps) {
   const [currentPage, setCurrentPage] = useState(1);
+  const [updateRow, setUpdateRow] = useState<DisbursementRow | null>(null);
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false);
+
+  const [deleteRow, setDeleteRow] = useState<DisbursementRow | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+
   const rowsPerPage = 10;
-
-  // Calculate page count
   const totalPages = Math.ceil(data.length / rowsPerPage);
-
-  // Slice data for current page
   const paginatedData = data.slice(
     (currentPage - 1) * rowsPerPage,
     currentPage * rowsPerPage
@@ -49,8 +52,29 @@ export default function DisbursementTable({ data }: DisbursementTableProps) {
     XLSX.writeFile(workbook, "DisbursementData.xlsx");
   };
 
+  const openUpdateModal = (row: DisbursementRow) => {
+    setUpdateRow(row);
+    setIsUpdateModalOpen(true);
+  };
+
+  const closeUpdateModal = () => {
+    setUpdateRow(null);
+    setIsUpdateModalOpen(false);
+  };
+
+  const openDeleteModal = (row: DisbursementRow) => {
+    setDeleteRow(row);
+    setIsDeleteModalOpen(true);
+  };
+
+  const closeDeleteModal = () => {
+    setDeleteRow(null);
+    setIsDeleteModalOpen(false);
+  };
+
   return (
     <div className="w-full p-6 rounded-xl border bg-white shadow-sm">
+      {/* Header */}
       <div className="flex justify-between items-center p-6 mb-4">
         <h2 className="text-xl font-semibold text-black">
           Results ({data.length} records)
@@ -63,9 +87,8 @@ export default function DisbursementTable({ data }: DisbursementTableProps) {
         </button>
       </div>
 
-      {/* TABLE WRAPPER: overflow-x-auto by default, visible on large screens */}
+      {/* Table */}
       <div className="overflow-x-auto lg:overflow-x-visible">
-        {/* TABLE: min-w-max ensures table won't shrink below its content width, forcing overflow on small screens */}
         <table className="min-w-max w-full border-collapse text-sm text-center">
           <thead>
             <tr className="border-b text-gray-500">
@@ -79,26 +102,30 @@ export default function DisbursementTable({ data }: DisbursementTableProps) {
               <th className="py-3 px-4 font-medium whitespace-nowrap">Actions</th>
             </tr>
           </thead>
-
           <tbody>
             {paginatedData.map((row) => (
-              // The key uses row.id which is now correctly typed as a string
               <tr
-                key={row.id} 
+                key={row.id}
                 className="border-b hover:bg-gray-50 text-black text-lg"
               >
                 <td className="py-4 px-4 border-r whitespace-nowrap">{formatDateForDisplay(row.date)}</td>
                 <td className="py-4 px-4 border-r whitespace-nowrap">{formatDateForDisplay(row.deadline)}</td>
                 <td className="py-4 px-4 border-r whitespace-nowrap">{row.monthsToPay}</td>
                 <td className="py-4 px-4 whitespace-nowrap">{row.name}</td>
-                <td className="py-4 px-4 font-semibold whitespace-nowrap">{row.amount.toLocaleString()}</td>
-                <td className="py-4 px-4 whitespace-nowrap">{row.interest.toLocaleString()}</td>
+                <td className="py-4 px-4 font-semibold whitespace-nowrap">₱{row.amount.toLocaleString()}</td>
+                <td className="py-4 px-4 whitespace-nowrap">₱{row.interest.toLocaleString()}</td>
                 <td className="py-4 px-4 whitespace-nowrap">{row.status}</td>
                 <td className="py-4 flex justify-center gap-2 px-4 whitespace-nowrap">
-                  <button className="rounded-lg border p-2 bg-yellow-400 hover:bg-yellow-600">
+                  <button
+                    className="rounded-lg border p-2 bg-yellow-400 hover:bg-yellow-600"
+                    onClick={() => openUpdateModal(row)}
+                  >
                     ✏️
                   </button>
-                  <button className="rounded-lg border p-2 bg-red-500 hover:bg-red-700">
+                  <button
+                    className="rounded-lg border p-2 bg-red-500 hover:bg-red-700"
+                    onClick={() => openDeleteModal(row)}
+                  >
                     🗑️
                   </button>
                 </td>
@@ -116,7 +143,7 @@ export default function DisbursementTable({ data }: DisbursementTableProps) {
         </table>
       </div>
 
-      {/* PAGINATION CONTROLS */}
+      {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex justify-center items-center gap-2 mt-5 text-black p-6 pt-0">
           <button
@@ -126,7 +153,6 @@ export default function DisbursementTable({ data }: DisbursementTableProps) {
           >
             Prev
           </button>
-
           {Array.from({ length: totalPages }).map((_, i) => (
             <button
               key={i}
@@ -138,17 +164,30 @@ export default function DisbursementTable({ data }: DisbursementTableProps) {
               {i + 1}
             </button>
           ))}
-
           <button
-            onClick={() =>
-              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-            }
+            onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
             disabled={currentPage === totalPages}
             className="px-3 py-1 border rounded disabled:opacity-50"
           >
             Next
           </button>
         </div>
+      )}
+
+      {/* Modals */}
+      {updateRow && (
+        <UpdateDisbursementModal
+          open={isUpdateModalOpen}
+          onClose={closeUpdateModal}
+          row={updateRow}
+        />
+      )}
+      {deleteRow && (
+        <DeleteDisbursementModal
+          open={isDeleteModalOpen}
+          onClose={closeDeleteModal}
+          row={deleteRow}
+        />
       )}
     </div>
   );

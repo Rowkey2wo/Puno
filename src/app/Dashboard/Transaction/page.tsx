@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "@/app/lib/firebase";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import ClientCard from "../../Components/ClientCard";
 import SearchBar from "../../Components/SearchBar";
 import type { Status } from "../../Components/ClientCard";
 import AddClientModal from "./AddClientModal";
+import ClientPINModal from "./ClientPINmodal";
 
 type Client = {
   id: string;
@@ -17,6 +18,7 @@ type Client = {
   status: Status;
   nickname?: string;
   validId?: string;
+  isPrivate?: string;
 };
 
 export default function Transaction() {
@@ -25,10 +27,14 @@ export default function Transaction() {
   const [searchTerm, setSearchTerm] = useState("");
   const [openAdd, setOpenAdd] = useState(false);
 
+  const router = useRouter();
+  const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
+  const [openPinModal, setOpenPinModal] = useState(false);
+
   useEffect(() => {
     setLoading(true);
 
-    // 🔥 Listen to live updates
+    // 🔥 Listen to live updates from Clients collection
     const unsub = onSnapshot(
       collection(db, "Clients"),
       (snapshot) => {
@@ -41,6 +47,7 @@ export default function Transaction() {
             status: d.Status as Status,
             nickname: d.Nickname ?? "",
             validId: d.ValidID ?? "",
+            isPrivate: d.isPrivate ?? "No",
           };
         });
 
@@ -53,11 +60,10 @@ export default function Transaction() {
       }
     );
 
-    // Cleanup listener on unmount
     return () => unsub();
   }, []);
 
-  /* ✅ CLIENT-ONLY SEARCH FILTER */
+  // Filter clients based on search
   const filteredClients = clients.filter((client) => {
     const term = searchTerm.toLowerCase();
 
@@ -69,9 +75,19 @@ export default function Transaction() {
     );
   });
 
+  // Handle client card click
+  const handleClientClick = (clientId: string, isPrivate: boolean) => {
+    if (isPrivate) {
+      setSelectedClientId(clientId);
+      setOpenPinModal(true);
+    } else {
+      router.push(`/Dashboard/Transaction/${clientId}`);
+    }
+  };
+
   return (
     <div className="container-lg min-h-screen bg-white p-5 md:p-15">
-      {/* SEARCH + ADD */}
+      {/* SEARCH + ADD CLIENT */}
       <div className="grid grid-cols-1 md:grid-cols-[2fr_1.5fr] gap-4 ps-2">
         <div className="mb-5 w-full">
           <SearchBar
@@ -118,15 +134,31 @@ export default function Transaction() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 p-3 gap-5">
           {filteredClients.map((client) => (
-            <Link
-              href={`/Dashboard/Transaction/${client.id}`}
+            <div
               key={client.id}
-              className="block"
+              className="block cursor-pointer"
+              onClick={() =>
+                handleClientClick(client.id, client.isPrivate === "Yes")
+              }
             >
               <ClientCard {...client} />
-            </Link>
+            </div>
           ))}
         </div>
+      )}
+
+      {/* Client PIN Modal */}
+      {selectedClientId && (
+        <ClientPINModal
+          clientId={selectedClientId}
+          open={openPinModal}
+          onClose={() => setOpenPinModal(false)}
+          onSuccess={() => {
+            router.push(`/Dashboard/Transaction/${selectedClientId}`);
+            setOpenPinModal(false);
+            setSelectedClientId(null);
+          }}
+        />
       )}
     </div>
   );

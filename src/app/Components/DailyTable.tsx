@@ -1,73 +1,95 @@
-// components/DailyTable_Alternative.tsx 
+// components/DailyTable.tsx
 
 "use client";
 
 import { useState } from "react";
+import UpdateDailyModal from "@/app/Dashboard/DailyList/UpdateDailyModal";
+import DeleteDailyModal from "@/app/Dashboard/DailyList/DeleteDailyModal";
+import * as XLSX from "xlsx";
 
-// The input 'date' property is now assumed to be in the "Dec 28, 2025" format
+// Row type
 type Row = {
+  id: string;
+  clientId: string;
   name: string;
   amount: number;
-  date: string; 
+  date: string; // "Dec 28, 2025"
 };
 
 type DateFilterType = "all" | "year" | "month" | "day";
 
-// We don't need a display formatter anymore, the input is already formatted.
-
 export default function DailyTable({ data }: { data: Row[] }) {
   const [dateFilterType, setDateFilterType] = useState<DateFilterType>("all");
   const [dateValue, setDateValue] = useState("");
+  const [editRow, setEditRow] = useState<Row | null>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
+  const todayStr = new Date().toLocaleDateString("en-US", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  // Filter logic
   const filteredData = data.filter((row) => {
-    if (dateFilterType === "all" || !dateValue) return true;
-
-    // Convert the display date string (e.g., "Dec 28, 2025") into a JS Date object
     const rowDateObj = new Date(row.date);
+    if (isNaN(rowDateObj.getTime())) return false;
 
-    if (isNaN(rowDateObj.getTime())) return false; // Skip invalid dates
+    // 1️⃣ If "all" filter is selected AND no specific date filter value, show only today
+    if (dateFilterType === "all" && !dateValue) {
+      return row.date === todayStr;
+    }
 
+    // 2️⃣ Apply filters if user selected a specific date
     if (dateFilterType === "year") {
-      // dateValue is "2025"
       return rowDateObj.getFullYear().toString() === dateValue;
     }
 
     if (dateFilterType === "month") {
-      // dateValue is "YYYY-MM" (e.g., "2025-12") from the input type="month"
-      const [filterYear, filterMonth] = dateValue.split('-');
-      
+      const [filterYear, filterMonth] = dateValue.split("-");
       return (
         rowDateObj.getFullYear().toString() === filterYear &&
-        // getMonth() is 0-indexed (0=Jan), but input month is 1-indexed (12=Dec)
-        (rowDateObj.getMonth() + 1).toString().padStart(2, '0') === filterMonth
+        (rowDateObj.getMonth() + 1).toString().padStart(2, "0") === filterMonth
       );
     }
 
     if (dateFilterType === "day") {
-      // dateValue is "YYYY-MM-DD" (e.g., "2025-12-28") from the input type="date"
-      const [filterYear, filterMonth, filterDay] = dateValue.split('-');
-
+      const [filterYear, filterMonth, filterDay] = dateValue.split("-");
       return (
         rowDateObj.getFullYear().toString() === filterYear &&
-        (rowDateObj.getMonth() + 1).toString().padStart(2, '0') === filterMonth &&
-        rowDateObj.getDate().toString().padStart(2, '0') === filterDay
+        (rowDateObj.getMonth() + 1).toString().padStart(2, "0") === filterMonth &&
+        rowDateObj.getDate().toString().padStart(2, "0") === filterDay
       );
     }
 
+    // fallback, show all if somehow none matched
     return true;
   });
 
+  // Excel Export
+  const exportToExcel = () => {
+    const worksheet = XLSX.utils.json_to_sheet(
+      filteredData.map((row) => ({
+        Date: row.date,
+        Name: row.name,
+        Amount: row.amount,
+      }))
+    );
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "DailyPayments");
+    XLSX.writeFile(workbook, "DailyPayments.xlsx");
+  };
+
   return (
-    <div className="w-full rounded-xl border bg-white p-6 shadow-sm">
-      {/* ... (Filter UI remains the same, it handles the different input formats automatically) ... */}
+    <div className="w-full rounded-xl border bg-white p-6 shadow-lg">
+      {/* Filter + Export */}
       <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-4 text-black">
         <div className="flex flex-wrap items-center gap-3">
-          {/* FILTER TYPE */}
           <select
             value={dateFilterType}
             onChange={(e) => {
               setDateFilterType(e.target.value as DateFilterType);
-              setDateValue(""); // Clear the value when changing filter type
+              setDateValue(""); // clear filter value on type change
             }}
             className="bg-gray-50 border border-gray-300 rounded-lg px-4 py-2 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500"
           >
@@ -77,7 +99,6 @@ export default function DailyTable({ data }: { data: Row[] }) {
             <option value="day">By Day</option>
           </select>
 
-          {/* YEAR PICKER */}
           {dateFilterType === "year" && (
             <input
               type="number"
@@ -90,7 +111,6 @@ export default function DailyTable({ data }: { data: Row[] }) {
             />
           )}
 
-          {/* MONTH PICKER */}
           {dateFilterType === "month" && (
             <input
               type="month"
@@ -100,7 +120,6 @@ export default function DailyTable({ data }: { data: Row[] }) {
             />
           )}
 
-          {/* DAY PICKER */}
           {dateFilterType === "day" && (
             <input
               type="date"
@@ -111,49 +130,79 @@ export default function DailyTable({ data }: { data: Row[] }) {
           )}
         </div>
 
-        <button className="flex items-center gap-2 text-green-900 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-200">
-          <span className="text-lg">+</span> Export
+        <button
+          onClick={exportToExcel}
+          className="flex items-center gap-2 text-green-900 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-green-50 transition-colors"
+        >
+          <span className="text-lg">📥</span> Export
         </button>
       </div>
 
-      {/* TABLE */}
+      {/* Table */}
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm text-center">
-          <thead>
-            <tr className="border-b text-gray-500">
-              <th className="py-3 font-medium">Date</th>
-              <th className="py-3 font-medium">Name</th>
-              <th className="py-3 font-medium">Amount</th>
-              <th className="py-3 font-medium">Actions</th>
+        <table className="w-full border-collapse text-sm text-center shadow-sm">
+          <thead className="bg-gray-100 sticky top-0 z-10">
+            <tr className="border-b text-gray-500 uppercase text-xs">
+              <th className="py-3 px-2 font-medium">Date</th>
+              <th className="py-3 px-2 font-medium">Name</th>
+              <th className="py-3 px-2 font-medium">Amount</th>
+              <th className="py-3 px-2 font-medium">Actions</th>
             </tr>
           </thead>
 
           <tbody>
             {filteredData.map((row, idx) => (
-              <tr key={idx} className="border-b hover:bg-gray-50 text-black text-lg">
-                {/* We use the input format directly as it is already the display format */}
-                <td className="py-4">{row.date}</td> 
-                <td className="py-4">{row.name}</td>
-                <td className="py-4 font-semibold">{row.amount.toLocaleString()}</td>
-                <td className="py-4 flex justify-center gap-2">
-                  <button className="rounded-lg border p-2 bg-yellow-400 hover:bg-yellow-600">
+              <tr
+                key={idx}
+                className="border-b hover:bg-blue-50 transition-colors text-black text-lg"
+              >
+                <td className="py-4 px-2">{row.date}</td>
+                <td className="py-4 px-2">{row.name}</td>
+                <td className="py-4 px-2 font-semibold">₱{row.amount.toLocaleString()}</td>
+                <td className="py-4 px-2 flex justify-center gap-2">
+                  <button
+                    onClick={() => setEditRow(row)}
+                    className="rounded-lg border p-2 bg-yellow-400 hover:bg-yellow-600 transition-colors"
+                  >
                     ✏️
                   </button>
-                  <button className="rounded-lg border p-2 bg-red-500 hover:bg-red-700">
+                  <button
+                    onClick={() => setDeleteId(row.id)}
+                    className="rounded-lg border p-2 bg-red-500 hover:bg-red-700 transition-colors"
+                  >
                     🗑️
                   </button>
                 </td>
               </tr>
             ))}
+
+            {filteredData.length === 0 && (
+              <tr>
+                <td colSpan={4} className="py-10 text-gray-400 text-center">
+                  No records found for this selection.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
-
-        {filteredData.length === 0 && (
-          <div className="py-10 text-center text-gray-400">
-            No records found for this selection.
-          </div>
-        )}
       </div>
+
+      {/* Modals */}
+      {editRow && (
+        <UpdateDailyModal
+          open={true}
+          row={editRow}
+          onClose={() => setEditRow(null)}
+        />
+      )}
+
+      {deleteId && (
+        <DeleteDailyModal
+          open={true}
+          id={deleteId}
+          onClose={() => setDeleteId(null)}
+        />
+      )}
     </div>
   );
 }

@@ -116,12 +116,11 @@ export default function SeeAllDisburseClient({
 
   return (
     <div className="min-h-screen bg-linear-to-br from-indigo-50 to-purple-100 p-6">
-      {/* 🔙 Back */}
       <button
         onClick={() =>
           router.push(`/Dashboard/Transaction/${clientId}`)
         }
-        className="text-sm text-indigo-600 hover:underline mb-6"
+        className="text-sm text-indigo-600 hover:underline mb-6 cursor-pointer"
       >
         ← Back to Client
       </button>

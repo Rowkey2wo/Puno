@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 
 type SidebarProps = {
   isOpen: boolean;
@@ -12,12 +13,31 @@ const menuItems = [
   { label: "Transactions", path: "/Dashboard/Transaction" },
   { label: "Daily List", path: "/Dashboard/DailyList" },
   { label: "Disbursement List", path: "/Dashboard/Disbursement" },
-  { label: "Expenses", path: "/Dashboard/Expenses" },
   { label: "I - Report", path: "/Dashboard/I-Report" },
+  { label: "Expenses", path: "/Dashboard/Expenses" },
 ];
 
 export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const [userName, setUserName] = useState("NAME");
+
+  // ✅ Get logged-in user from sessionStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const storedUser = sessionStorage.getItem("loggedUser");
+      if (storedUser) {
+        try {
+          const parsed = JSON.parse(storedUser);
+          setUserName(parsed.name || "NAME");
+        } catch (e) {
+          console.error("Failed to parse loggedUser:", e);
+        }
+      }
+    }
+  }, []);
+
+  // Only these users can see I-Report
+  const allowedIReportUsers = ["Ruki", "Kim Teene"];
 
   return (
     <>
@@ -37,7 +57,7 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         `}
       >
         <div className="px-6 py-4 text-xl font-semibold">
-          Name
+          {userName}
         </div>
 
         <hr className="border-gray-700" />
@@ -45,6 +65,14 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
         <nav className="flex-1 px-4 py-4">
           <ul className="space-y-3">
             {menuItems.map((item) => {
+              // ✅ Hide I-Report if user is not allowed
+              if (
+                item.label === "I - Report" &&
+                !allowedIReportUsers.includes(userName)
+              ) {
+                return null;
+              }
+
               const isActive =
                 pathname === item.path ||
                 pathname.startsWith(item.path + "/");
@@ -71,7 +99,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
         <div className="px-4 py-4">
           <hr className="border-gray-700 mb-4" />
-          <button className="w-full rounded px-3 py-2 text-left text-red-400 hover:bg-gray-800">
+          <button
+            className="w-full rounded px-3 py-2 text-left text-red-400 hover:bg-gray-800"
+            onClick={() => {
+              sessionStorage.removeItem("loggedUser");
+              window.location.href = "/";
+            }}
+          >
             Logout →
           </button>
         </div>
