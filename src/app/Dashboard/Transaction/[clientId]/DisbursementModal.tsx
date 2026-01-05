@@ -199,6 +199,7 @@ export default function DisbursementModalClient({
 
     setIsProcessing(true);
     const amount = Number(form.Amount);
+    const penaltyAmount = Number(form.Penalty);
     const [year, month, day] = form.DateToday.split("-").map(Number);
     const now = new Date();
     const dateWithCurrentTime = new Date(year, month - 1, day, now.getHours(), now.getMinutes(), now.getSeconds());
@@ -220,7 +221,7 @@ export default function DisbursementModalClient({
           MonthsToPay: Number(form.MonthsToPay),
           Remarks: form.Remarks,
           Status: "",
-          Penalty: Number,
+          Penalty: Number(form.Penalty),
           DateToday: Timestamp.fromDate(dateWithCurrentTime),
           Deadline: Timestamp.fromDate(new Date(form.Deadline + "T23:59:59")),
         });
