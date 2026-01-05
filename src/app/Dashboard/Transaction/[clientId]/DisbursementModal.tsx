@@ -53,6 +53,7 @@ export default function DisbursementModalClient({
     MonthsToPay: "",
     DateToday: getTodayISO(),
     Deadline: "",
+    Penalty: "",
     Remarks: "Release",
   });
 
@@ -122,6 +123,7 @@ export default function DisbursementModalClient({
         MonthsToPay: "",
         DateToday: getTodayISO(),
         Deadline: "",
+        Penalty: "",
         Remarks: "Release",
       });
       setError("");
@@ -218,6 +220,7 @@ export default function DisbursementModalClient({
           MonthsToPay: Number(form.MonthsToPay),
           Remarks: form.Remarks,
           Status: "",
+          Penalty: Number,
           DateToday: Timestamp.fromDate(dateWithCurrentTime),
           Deadline: Timestamp.fromDate(new Date(form.Deadline + "T23:59:59")),
         });
@@ -263,6 +266,16 @@ export default function DisbursementModalClient({
         {!showPinModal ? (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="hidden">
+                  <label className="text-sm font-medium">Penalty</label>
+                  <input
+                    type="number"
+                    className="w-full border rounded p-2"
+                    value={form.Penalty}
+                    onChange={(e) => setForm({ ...form, Penalty: e.target.value })}
+                  />
+                </div>
+
               <div>
                 <label className="text-sm font-medium">Amount</label>
                 <input

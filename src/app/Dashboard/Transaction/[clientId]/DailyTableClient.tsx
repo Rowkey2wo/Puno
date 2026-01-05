@@ -36,7 +36,7 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
   const [dateRange, setDateRange] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // 🔒 Prevent infinite updates
+  // 🔒 Prevent infinite status updates
   const statusUpdateLock = useRef(false);
 
   const formatDate = (date: Date) =>
@@ -46,7 +46,7 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
       year: "numeric",
     });
 
-  // ================= CLIENT =================
+  // ================= CLIENT SNAPSHOT =================
   useEffect(() => {
     if (!clientId) return;
 
@@ -59,24 +59,30 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
     return () => unsub();
   }, [clientId]);
 
-  // ================= SNAPSHOTS =================
+  // ================= DISBURSEMENT + DAILY SNAPSHOTS =================
   useEffect(() => {
     if (!clientId) return;
 
     const unsubDisbursement = onSnapshot(
       query(collection(db, "Disbursement"), where("clientId", "==", clientId)),
-      (snap) =>
+      (snap) => {
         setDisbursements(
-          snap.docs.map((d) => ({ id: d.id, ...d.data() } as DisbursementItem))
-        )
+          snap.docs.map(
+            (d) => ({ id: d.id, ...d.data() } as DisbursementItem)
+          )
+        );
+      }
     );
 
     const unsubDaily = onSnapshot(
       query(collection(db, "DailyList"), where("clientId", "==", clientId)),
-      (snap) =>
+      (snap) => {
         setDailyData(
-          snap.docs.map((d) => ({ id: d.id, ...d.data() } as DailyListItem))
-        )
+          snap.docs.map(
+            (d) => ({ id: d.id, ...d.data() } as DailyListItem)
+          )
+        );
+      }
     );
 
     return () => {
@@ -85,7 +91,7 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
     };
   }, [clientId]);
 
-  // ================= CURRENT DISBURSEMENT =================
+  // ================= LATEST DISBURSEMENT =================
   const latestDisbursement = useMemo(() => {
     if (disbursements.length === 0) return null;
 
@@ -96,17 +102,25 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
     )[0];
   }, [disbursements]);
 
-  // ================= DATE RANGE =================
+  // ================= DATE RANGE DISPLAY =================
   useEffect(() => {
-    if (!latestDisbursement) return;
+    if (
+      !latestDisbursement ||
+      !(latestDisbursement.DateToday instanceof Timestamp) ||
+      !(latestDisbursement.Deadline instanceof Timestamp)
+    )
+      return;
 
-    const start = latestDisbursement.DateToday?.toDate();
-    const end = latestDisbursement.Deadline?.toDate();
-
-    if (start && end) {
-      setDateRange(`${formatDate(start)} - ${formatDate(end)}`);
-    }
-  }, [latestDisbursement?.id]);
+    setDateRange(
+      `${formatDate(latestDisbursement.DateToday.toDate())} - ${formatDate(
+        latestDisbursement.Deadline.toDate()
+      )}`
+    );
+  }, [
+    latestDisbursement?.id,
+    latestDisbursement?.DateToday,
+    latestDisbursement?.Deadline,
+  ]);
 
   // ================= AUTO STATUS SYNC =================
   useEffect(() => {
@@ -122,7 +136,7 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
     if (clientBalance <= 0) {
       nextStatus = "Paid";
     } else if (now > deadline) {
-      nextStatus = "Overdue"; // ✅ overrides Recon
+      nextStatus = "Overdue"; // ✅ overrides Recon & OnGoing
     } else {
       nextStatus = "OnGoing";
     }
@@ -153,7 +167,7 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
     clientId,
   ]);
 
-  // ================= FILTER DAILY =================
+  // ================= FILTER DAILY PAYMENTS =================
   const filteredDaily = useMemo(() => {
     if (!latestDisbursement) return [];
 
@@ -175,7 +189,9 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
       <div className="flex justify-between items-center mb-4">
         <div>
           <h2 className="text-lg font-semibold">Daily Payment</h2>
-          {dateRange && <p className="text-sm text-gray-500">{dateRange}</p>}
+          {dateRange && (
+            <p className="text-sm text-gray-500">{dateRange}</p>
+          )}
         </div>
 
         <button
@@ -188,9 +204,38 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
       </div>
 
       {currentStatus === "Overdue" && (
-        <p className="text-center py-4 text-red-500 font-semibold">
+        <p className="text-center py-3 text-red-600 font-semibold">
           ⚠️ This transaction is Overdue.
         </p>
+      )}
+
+      {filteredDaily.length === 0 ? (
+        <p className="text-center py-4 text-gray-500">
+          No payment for the current transaction.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y">
+            <thead>
+              <tr>
+                <th className="px-3 py-2 text-left">Date</th>
+                <th className="px-3 py-2 text-left">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredDaily.map((d) => (
+                <tr key={d.id} className="border-t">
+                  <td className="px-3 py-2">
+                    {formatDate(d.DateToday.toDate())}
+                  </td>
+                  <td className="px-3 py-2 font-bold">
+                    ₱{d.Amount.toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       <AddPaymentModal

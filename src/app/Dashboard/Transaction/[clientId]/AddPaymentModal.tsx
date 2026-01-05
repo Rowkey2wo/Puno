@@ -16,11 +16,6 @@ interface ClientBalanceInfo {
   loanType: "OnGoing" | "Recon";
 }
 
-interface DisbursementDates {
-  startDate: Date;
-  dueDate: Date;
-}
-
 export default function AddPaymentModal({
   clientId,
   open,
@@ -42,8 +37,11 @@ export default function AddPaymentModal({
   const [pinError, setPinError] = useState("");
   const [loggedUser, setLoggedUser] = useState<{ id: string; name: string } | null>(null);
 
-  const [disbursementDates, setDisbursementDates] = useState<DisbursementDates | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  // 🔴 Penalty states
+  const [showPenalty, setShowPenalty] = useState(false);
+  const [penalty, setPenalty] = useState<number | "">("");
 
   /* ---------------------------------------------
      FETCH CLIENT INFO
@@ -53,7 +51,6 @@ export default function AddPaymentModal({
 
     setIsLoading(true);
     try {
-      // Fetch client
       const clientRef = doc(db, "Clients", clientId);
       const clientSnap = await getDoc(clientRef);
 
@@ -68,47 +65,13 @@ export default function AddPaymentModal({
         status: clientData.Status ?? "OnGoing",
         loanType: clientData.LoanType ?? "OnGoing",
       });
-
-      // Fetch current disbursement
-      if (!currentDisbursementId) return;
-
-      const disRef = doc(db, "Disbursement", currentDisbursementId);
-      const disSnap = await getDoc(disRef);
-
-      if (!disSnap.exists()) {
-        setError("Disbursement not found.");
-        return;
-      }
-
-      const disData = disSnap.data();
-
-      const startTs = disData.DateToday;
-      const dueTs = disData.Deadline;
-
-      if (!(startTs instanceof Timestamp) || !(dueTs instanceof Timestamp)) {
-        setError("Invalid disbursement date range.");
-        return;
-      }
-
-      const startDate = startTs.toDate();
-      const dueDate = dueTs.toDate();
-
-      setDisbursementDates({ startDate, dueDate });
-
-      const today = new Date();
-      if (today >= startDate && today <= dueDate) {
-        setSelectedDate(today);
-      } else {
-        setSelectedDate(startDate);
-      }
-
     } catch (err) {
       console.error(err);
-      setError("Failed to load client or disbursement.");
+      setError("Failed to load client.");
     } finally {
       setIsLoading(false);
     }
-  }, [open, clientId, currentDisbursementId]);
+  }, [open, clientId]);
 
   /* ---------------------------------------------
      LOAD LOGGED USER
@@ -127,6 +90,9 @@ export default function AddPaymentModal({
     if (open) {
       fetchClient();
       setPaymentAmount("");
+      setPenalty("");
+      setShowPenalty(false);
+      setSelectedDate(new Date());
       setPin("");
       setPinError("");
       setError("");
@@ -157,15 +123,6 @@ export default function AddPaymentModal({
       setError("No active disbursement.");
       return;
     }
-    if (!selectedDate || !disbursementDates) {
-      setError("Invalid payment date.");
-      return;
-    }
-
-    if (selectedDate < disbursementDates.startDate || selectedDate > disbursementDates.dueDate) {
-      setError("Selected date is out of disbursement range.");
-      return;
-    }
 
     setShowPinModal(true);
   };
@@ -185,8 +142,7 @@ export default function AddPaymentModal({
         return;
       }
 
-      const storedPin = String(snap.data().PIN ?? "");
-      if (pin !== storedPin) {
+      if (pin !== String(snap.data().PIN ?? "")) {
         setPinError("Incorrect PIN.");
         return;
       }
@@ -203,9 +159,11 @@ export default function AddPaymentModal({
      PROCESS PAYMENT
   --------------------------------------------- */
   const processPayment = async () => {
-    if (!clientInfo || !loggedUser || !currentDisbursementId || !selectedDate) return;
+    if (!clientInfo || !loggedUser || !currentDisbursementId) return;
 
     const amount = Number(paymentAmount);
+    const penaltyValue = penalty === "" ? null : Number(penalty);
+
     setIsLoading(true);
 
     try {
@@ -216,30 +174,15 @@ export default function AddPaymentModal({
         if (!clientSnap.exists()) throw new Error("Client missing");
 
         const clientData = clientSnap.data();
-        const currentBalance = clientData.Balance ?? 0;
-        const loanType = clientData.LoanType ?? "OnGoing";
-        const currentStatus = clientData.Status ?? "OnGoing";
-
-        const newBalance = currentBalance - amount;
-
-        // Update Client
-        let updatedStatus: "Paid" | "Recon" | "OnGoing";
-        if (newBalance <= 0) {
-          updatedStatus = "Paid";
-        } else if (currentStatus === "Recon") {
-          updatedStatus = "Recon";
-        } else {
-          updatedStatus = "OnGoing";
-        }
+        const newBalance = (clientData.Balance ?? 0) - amount;
 
         tx.update(clientRef, {
           Balance: newBalance,
-          Status: updatedStatus,
+          Status: newBalance <= 0 ? "Paid" : clientData.Status,
         });
 
         // Add payment
-        const paymentRef = doc(collection(db, "DailyList"));
-        tx.set(paymentRef, {
+        tx.set(doc(collection(db, "DailyList")), {
           clientId,
           Amount: amount,
           DateToday: Timestamp.fromDate(selectedDate),
@@ -247,9 +190,10 @@ export default function AddPaymentModal({
           UserID: loggedUser.id,
         });
 
-        // Update Disbursement status
+        // Update Disbursement (Penalty only if used)
         const disRef = doc(db, "Disbursement", currentDisbursementId);
         tx.update(disRef, {
+          ...(penaltyValue !== null && { Penalty: penaltyValue }),
           Status: newBalance <= 0 ? "Paid" : "Active",
         });
       });
@@ -283,45 +227,58 @@ export default function AddPaymentModal({
 
         {!showPinModal ? (
           <>
-            {disbursementDates && (
-              <input
-                type="date"
-                value={selectedDate ? selectedDate.toISOString().split("T")[0] : ""}
-                min={disbursementDates.startDate.toISOString().split("T")[0]}
-                max={disbursementDates.dueDate.toISOString().split("T")[0]}
-                onChange={(e) => setSelectedDate(new Date(e.target.value))}
-                className="w-full p-3 border rounded mb-4"
-              />
-            )}
+            <input
+              type="date"
+              value={selectedDate.toISOString().split("T")[0]}
+              onChange={(e) => setSelectedDate(new Date(e.target.value))}
+              className="w-full p-3 border rounded mb-4"
+            />
+
             <input
               type="number"
               value={paymentAmount}
               onChange={(e) => setPaymentAmount(e.target.value)}
               placeholder="Enter amount"
-              className="w-full p-3 border rounded mb-4"
+              className="w-full p-3 border rounded mb-2"
             />
 
-            <div className="flex justify-end gap-3">
+            <span
+              onClick={() => {
+                setShowPenalty(!showPenalty);
+                if (!showPenalty) setPenalty(0);
+              }}
+              className="text-sm text-red-600 ms-2 border-b tracking-widest cursor-pointer"
+            >
+              Penalty?
+            </span>
+
+            {showPenalty && (
+              <input
+                type="number"
+                value={penalty}
+                onChange={(e) => setPenalty(e.target.value === "" ? "" : Number(e.target.value))}
+                placeholder="Enter penalty amount"
+                className="w-full p-3 border rounded mt-2"
+              />
+            )}
+
+            <div className="flex justify-end gap-3 mt-4">
               <button onClick={onClose} className="px-4 py-2 border rounded">
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
                 className={`px-4 py-2 rounded text-white ${
-                  !paymentAmount || Number(paymentAmount) <= 0 || Number(paymentAmount) > (clientInfo?.balance ?? 0)
-                    ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-blue-600 hover:bg-blue-700"
-                }`}
-                disabled={
-                  isLoading ||
                   !paymentAmount ||
                   Number(paymentAmount) <= 0 ||
                   Number(paymentAmount) > (clientInfo?.balance ?? 0)
-                }
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-blue-600 hover:bg-blue-700"
+                }`}
+                disabled={isLoading}
               >
                 Submit Payment
               </button>
-
             </div>
           </>
         ) : (
