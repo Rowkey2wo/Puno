@@ -25,16 +25,17 @@ export default function Transaction() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<Status | null>(null);
   const [openAdd, setOpenAdd] = useState(false);
 
   const router = useRouter();
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [openPinModal, setOpenPinModal] = useState(false);
 
+  // ================= FETCH CLIENTS =================
   useEffect(() => {
     setLoading(true);
 
-    // 🔥 Listen to live updates from Clients collection
     const unsub = onSnapshot(
       collection(db, "Clients"),
       (snapshot) => {
@@ -63,19 +64,23 @@ export default function Transaction() {
     return () => unsub();
   }, []);
 
-  // Filter clients based on search
+  // ================= FILTER =================
   const filteredClients = clients.filter((client) => {
     const term = searchTerm.toLowerCase();
 
-    return (
+    const matchesSearch =
       client.name.toLowerCase().includes(term) ||
       client.status.toLowerCase().includes(term) ||
       client.nickname?.toLowerCase().includes(term) ||
-      client.id.toLowerCase().includes(term)
-    );
+      client.id.toLowerCase().includes(term);
+
+    const matchesStatus =
+      statusFilter === null || client.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
   });
 
-  // Handle client card click
+  // ================= CLICK CLIENT =================
   const handleClientClick = (clientId: string, isPrivate: boolean) => {
     if (isPrivate) {
       setSelectedClientId(clientId);
@@ -83,6 +88,11 @@ export default function Transaction() {
     } else {
       router.push(`/Dashboard/Transaction/${clientId}`);
     }
+  };
+
+  // ================= TOGGLE STATUS FILTER =================
+  const toggleStatus = (status: Status) => {
+    setStatusFilter((prev) => (prev === status ? null : status));
   };
 
   return (
@@ -93,7 +103,7 @@ export default function Transaction() {
           <SearchBar
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search client name, status, or ID..."
+            placeholder="Search client name..."
           />
         </div>
 
@@ -110,18 +120,33 @@ export default function Transaction() {
         </div>
       </div>
 
-      {/* STATUS LEGEND */}
-      <div className="grid grid-cols-2 text-black p-3 md:grid-cols-5">
-        <h1 className="flex">
+      {/* STATUS LEGEND (CLICKABLE FILTER) */}
+      <div className="grid grid-cols-2 text-black p-3 md:grid-cols-5 gap-2">
+        <h1
+          className="flex items-center cursor-pointer"
+          onClick={() => toggleStatus("OnGoing")}
+        >
           <span className="rounded-full h-5 w-5 bg-blue-600 me-2" /> = On-Going
         </h1>
-        <h1 className="flex">
+
+        <h1
+          className="flex items-center cursor-pointer"
+          onClick={() => toggleStatus("Recon")}
+        >
           <span className="rounded-full h-5 w-5 bg-yellow-400 me-2" /> = Recon
         </h1>
-        <h1 className="flex">
+
+        <h1
+          className="flex items-center cursor-pointer"
+          onClick={() => toggleStatus("Overdue")}
+        >
           <span className="rounded-full h-5 w-5 bg-red-500 me-2" /> = Overdue
         </h1>
-        <h1 className="flex">
+
+        <h1
+          className="flex items-center cursor-pointer"
+          onClick={() => toggleStatus("Paid")}
+        >
           <span className="rounded-full h-5 w-5 bg-green-600 me-2" /> = Paid
         </h1>
       </div>
@@ -147,7 +172,7 @@ export default function Transaction() {
         </div>
       )}
 
-      {/* Client PIN Modal */}
+      {/* CLIENT PIN MODAL */}
       {selectedClientId && (
         <ClientPINModal
           clientId={selectedClientId}

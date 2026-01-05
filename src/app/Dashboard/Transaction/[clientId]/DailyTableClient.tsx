@@ -36,7 +36,7 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
   const [dateRange, setDateRange] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // 🔒 Prevent repeated updates
+  // 🔒 Prevent infinite updates
   const statusUpdateLock = useRef(false);
 
   const formatDate = (date: Date) =>
@@ -46,49 +46,38 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
       year: "numeric",
     });
 
-  // ================= CLIENT BALANCE =================
+  // ================= CLIENT =================
   useEffect(() => {
     if (!clientId) return;
 
-    const unsubClient = onSnapshot(
-      doc(db, "Clients", clientId),
-      (snap) => {
-        if (snap.exists()) {
-          setClientBalance(snap.data().Balance ?? 0);
-        }
+    const unsub = onSnapshot(doc(db, "Clients", clientId), (snap) => {
+      if (snap.exists()) {
+        setClientBalance(snap.data().Balance ?? 0);
       }
-    );
+    });
 
-    return () => unsubClient();
+    return () => unsub();
   }, [clientId]);
 
   // ================= SNAPSHOTS =================
   useEffect(() => {
     if (!clientId) return;
 
-    const disburseQuery = query(
-      collection(db, "Disbursement"),
-      where("clientId", "==", clientId)
+    const unsubDisbursement = onSnapshot(
+      query(collection(db, "Disbursement"), where("clientId", "==", clientId)),
+      (snap) =>
+        setDisbursements(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() } as DisbursementItem))
+        )
     );
 
-    const unsubDisbursement = onSnapshot(disburseQuery, (snap) => {
-      const list = snap.docs.map(
-        (d) => ({ id: d.id, ...d.data() } as DisbursementItem)
-      );
-      setDisbursements(list);
-    });
-
-    const dailyQuery = query(
-      collection(db, "DailyList"),
-      where("clientId", "==", clientId)
+    const unsubDaily = onSnapshot(
+      query(collection(db, "DailyList"), where("clientId", "==", clientId)),
+      (snap) =>
+        setDailyData(
+          snap.docs.map((d) => ({ id: d.id, ...d.data() } as DailyListItem))
+        )
     );
-
-    const unsubDaily = onSnapshot(dailyQuery, (snap) => {
-      const list = snap.docs.map(
-        (d) => ({ id: d.id, ...d.data() } as DailyListItem)
-      );
-      setDailyData(list);
-    });
 
     return () => {
       unsubDisbursement();
@@ -117,7 +106,7 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
     if (start && end) {
       setDateRange(`${formatDate(start)} - ${formatDate(end)}`);
     }
-  }, [latestDisbursement]);
+  }, [latestDisbursement?.id]);
 
   // ================= AUTO STATUS SYNC =================
   useEffect(() => {
@@ -126,23 +115,29 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
 
     const now = new Date();
     const deadline = latestDisbursement.Deadline.toDate();
+    deadline.setHours(23, 59, 59, 999); // end of day
 
-    let nextStatus: string | null = null;
+    let nextStatus: string;
 
     if (clientBalance <= 0) {
       nextStatus = "Paid";
     } else if (now > deadline) {
-      nextStatus = "Overdue";
+      nextStatus = "Overdue"; // ✅ overrides Recon
     } else {
-      nextStatus = "Ongoing";
+      nextStatus = "OnGoing";
     }
 
     if (latestDisbursement.Status !== nextStatus) {
       statusUpdateLock.current = true;
 
-      updateDoc(doc(db, "Disbursement", latestDisbursement.id), {
-        Status: nextStatus,
-      })
+      Promise.all([
+        updateDoc(doc(db, "Disbursement", latestDisbursement.id), {
+          Status: nextStatus,
+        }),
+        updateDoc(doc(db, "Clients", clientId), {
+          Status: nextStatus,
+        }),
+      ])
         .catch(console.error)
         .finally(() => {
           setTimeout(() => {
@@ -150,7 +145,13 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
           }, 300);
         });
     }
-  }, [clientBalance, latestDisbursement]);
+  }, [
+    clientBalance,
+    latestDisbursement?.id,
+    latestDisbursement?.Status,
+    latestDisbursement?.Deadline,
+    clientId,
+  ]);
 
   // ================= FILTER DAILY =================
   const filteredDaily = useMemo(() => {
@@ -163,79 +164,34 @@ export default function DailyTableClient({ clientId }: { clientId: string }) {
           b.DateToday.toDate().getTime() -
           a.DateToday.toDate().getTime()
       );
-  }, [dailyData, latestDisbursement]);
+  }, [dailyData, latestDisbursement?.id]);
 
   const isFullyPaid = clientBalance !== null && clientBalance <= 0;
   const currentStatus = isFullyPaid ? "Paid" : latestDisbursement?.Status;
 
   // ================= UI =================
-  let tableContent;
-
-  if (currentStatus === "Paid" && isFullyPaid) {
-    tableContent = (
-      <div className="py-10 text-center text-green-600 font-semibold bg-green-50 rounded-lg">
-        ✅ The latest transaction is fully Paid.
-      </div>
-    );
-  } else if (currentStatus === "Overdue") {
-    tableContent = (
-      <p className="text-center py-4 text-red-500 font-semibold">
-        ⚠️ This transaction is Overdue.
-      </p>
-    );
-  } else if (filteredDaily.length === 0) {
-    tableContent = (
-      <p className="text-center py-4 text-gray-500">
-        No payment for the current transaction.
-      </p>
-    );
-  } else {
-    tableContent = (
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y">
-          <thead>
-            <tr>
-              <th className="px-3 py-2 text-left">Date</th>
-              <th className="px-3 py-2 text-left">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredDaily.map((d) => (
-              <tr key={d.id} className="border-t">
-                <td className="px-3 py-2">
-                  {formatDate(d.DateToday.toDate())}
-                </td>
-                <td className="px-3 py-2 font-bold">
-                  ₱{d.Amount.toLocaleString()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  }
-
   return (
     <div className="bg-white shadow-lg rounded-xl p-4 text-black w-full">
       <div className="flex justify-between items-center mb-4">
         <div>
           <h2 className="text-lg font-semibold">Daily Payment</h2>
-          {dateRange && (
-            <p className="text-sm text-gray-500">{dateRange}</p>
-          )}
+          {dateRange && <p className="text-sm text-gray-500">{dateRange}</p>}
         </div>
 
         <button
           onClick={() => setIsModalOpen(true)}
           disabled={isFullyPaid}
-          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-700 disabled:opacity-50"
+          className="bg-red-500 text-white px-4 py-2 rounded disabled:opacity-50"
         >
           {isFullyPaid ? "Transaction Paid" : "Add Payment"}
         </button>
       </div>
 
-      {tableContent}
+      {currentStatus === "Overdue" && (
+        <p className="text-center py-4 text-red-500 font-semibold">
+          ⚠️ This transaction is Overdue.
+        </p>
+      )}
 
       <AddPaymentModal
         clientId={clientId}
